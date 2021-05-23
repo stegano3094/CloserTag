@@ -1,0 +1,2 @@
+rootProject.name = "CloserTag"
+include ':app'
