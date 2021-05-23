@@ -22,7 +22,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- NFC -->
+            <!-- NFC 리소스 파일 지정-->
             <intent-filter>
                 <action android:name="android.nfc.action.TECH_DISCOVERED"/>
             </intent-filter>

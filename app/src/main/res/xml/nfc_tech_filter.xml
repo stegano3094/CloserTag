@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!-- https://developer.android.com/guide/topics/connectivity/nfc/advanced-nfc?hl=ko#tag-tech -->
+
     <tech-list>
+        <!-- NFC-F 속성(JIS 6319-4) 및 I/O 작업에 액세스 -->
         <tech>android.nfc.tech.Ndef</tech>
     </tech-list>
+
 </resources>
