@@ -2,6 +2,7 @@ package com.stegano.closertag
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.net.Uri
 import android.nfc.NdefMessage
 import android.nfc.NdefRecord
 import android.nfc.NfcAdapter
@@ -9,8 +10,11 @@ import android.nfc.Tag
 import android.nfc.tech.Ndef
 import android.os.Bundle
 import android.util.Log
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import kotlinx.android.synthetic.main.activity_main.*
+import java.util.*
 
 class MainActivity : AppCompatActivity() {
     val TAG: String = "MainActivity"
@@ -22,6 +26,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         // 단말기의 NFC 사용이 불가능 할 때 null을 반환함
         adapter = NfcAdapter.getDefaultAdapter(this)
@@ -31,12 +36,15 @@ class MainActivity : AppCompatActivity() {
             addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
 
-        // 다른 액티비티에서 처리하는 방법
-//        val intent = Intent(this, second::class.java)
-
         // 태그의 세부 정보를 채움 (해당 액티비티에 intent 정보를 넣는다)
         pendingIntent = PendingIntent.getActivity(this, 0, intent, 0)
 
+        readDataText.setOnClickListener {
+            val link = "" + readDataText.text
+            Log.e(TAG, "onCreate: link: $link")
+            val intent2 = Intent(Intent.ACTION_VIEW, Uri.parse(link))
+            startActivity(intent2)
+        }
     }
 
     // 생명주기 콜백 정의 -----------------------------------------------------------------------------
@@ -59,15 +67,69 @@ class MainActivity : AppCompatActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
 
+        // 페이로드를 포함하고 태그의 기술을 열거할 수 있는 Tag 객체를 인텐트에서 가져옴
         val tagFromIntent : Tag? = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG)
+        val writeValue = "http://steganowork.ipdisk.co.kr/apps/xe/"
+        // NFC로 메시지 전송 시
+        val makeMessage: NdefMessage = NdefMessage(Uri.parse(writeValue).let { uri ->
+            NdefRecord.createUri(uri)
+        })
 
-        val writeValue = "https://github.com/stegano3094";
-        val message: NdefMessage = NdefMessage(NdefRecord.createUri(writeValue))
+        // NFC로 텍스트 전송 시  (US-ASCII, UTF-8, UTF-16, ...)
+//        val makeMessage: NdefMessage = NdefMessage(NdefRecord.createTextRecord("UTF-16", "테스트입니다~!!")
+//        )
+
+        Log.e(TAG, "onNewIntent: makeMessage: $makeMessage")
 
         if(tagFromIntent != null) {
-            writeTag(message, tagFromIntent)
+            if(toggleButton.isChecked) {  // 토글 버튼 ON 시 NFC 태그로 전송함
+                writeTag(makeMessage, tagFromIntent)
+            } else {
+                readTag(tagFromIntent)
+            }
         } else {
             Toast.makeText(applicationContext, "태그를 인식하지 못했습니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun readTag(tag: Tag) {
+        if (intent.action == NfcAdapter.ACTION_NDEF_DISCOVERED){
+            val messages = intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES)
+            if(messages == null){
+                return
+            }
+
+            for (msgIndex in messages.indices){
+                val msg: NdefMessage = messages[msgIndex] as NdefMessage
+                val recs = msg.records
+
+                for (recsIndex in recs.indices) {
+                    val record = recs[recsIndex]
+                    if (Arrays.equals(record.type, NdefRecord.RTD_URI)) {
+                        val intent2 = Intent(Intent.ACTION_VIEW, record.toUri())
+                        Log.e(TAG, "readTag: record.toUri(): $record.toUri()")
+                        startActivity(intent2)
+                    }
+                }
+            }
+        }
+
+        // URI 링크 이상한데 수정해야함
+
+        val ndef = Ndef.get(tag)
+        if (ndef != null) {
+            ndef.connect()
+            val data = ndef.cachedNdefMessage
+            Toast.makeText(applicationContext, "NFC 태그에 저장된 값 : $data", Toast.LENGTH_SHORT).show()
+            Log.e(TAG, "onNewIntent: NFC 태그에 저장된 값 : $data")
+
+            for (i in data.records) {
+                Log.e(TAG, "onNewIntent: NFC 태그에 저장된 값 id : ${String(i.id)}")
+                Log.e(TAG, "onNewIntent: NFC 태그에 저장된 값 tnf : ${i.tnf}")
+                Log.e(TAG, "onNewIntent: NFC 태그에 저장된 값 type : ${i.type}")
+                Log.e(TAG, "onNewIntent: NFC 태그에 저장된 값 payload : ${String(i.payload)}")
+                readDataText.text = String(i.payload)
+            }
         }
     }
 
@@ -80,9 +142,11 @@ class MainActivity : AppCompatActivity() {
                 ndef.connect()
                 if (!ndef.isWritable) {
                     Toast.makeText(applicationContext, "NFC 태그에 정보를 저장할 수 없습니다.", Toast.LENGTH_SHORT).show()
+                    return
                 }
                 if (ndef.maxSize < size) {
                     Toast.makeText(applicationContext, "NFC 태그에 저장할 정보를 줄여주세요.", Toast.LENGTH_SHORT).show()
+                    return
                 }
                 ndef.writeNdefMessage(message)
                 Toast.makeText(applicationContext, "NFC 태그에 저장하였습니다.", Toast.LENGTH_SHORT).show()
