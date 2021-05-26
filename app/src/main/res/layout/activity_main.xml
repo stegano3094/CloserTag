@@ -30,9 +30,10 @@
 
     <ToggleButton
         android:id="@+id/toggleButton"
-        android:layout_width="150dp"
+        android:layout_width="200dp"
         android:layout_height="wrap_content"
-        android:text="NFC 태그로 전송"
+        android:textOn="NFC에 데이터 전송하기"
+        android:textOff="NFC 데이터 수신하기"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"

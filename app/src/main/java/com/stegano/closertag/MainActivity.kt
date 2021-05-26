@@ -10,13 +10,18 @@ import android.nfc.Tag
 import android.nfc.tech.Ndef
 import android.os.Bundle
 import android.util.Log
+import android.view.Gravity
+import android.view.MenuItem
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.GravityCompat
+import com.google.android.material.navigation.NavigationView
 import kotlinx.android.synthetic.main.activity_main.*
+import kotlinx.android.synthetic.main.activity_main_drawerlayout.*
 import java.util.*
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelectedListener {
     val TAG: String = "MainActivity"
 
     // NFC의 필수 변수 선언
@@ -25,8 +30,10 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        setContentView(R.layout.activity_main_drawerlayout)  // 레이아웃 세팅
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)  // 화면 꺼짐 방지
+
+        naviView.setNavigationItemSelectedListener(this)  // 드로어 리스너 세팅
 
         // 단말기의 NFC 사용이 불가능 할 때 null을 반환함
         adapter = NfcAdapter.getDefaultAdapter(this)
@@ -45,6 +52,33 @@ class MainActivity : AppCompatActivity() {
             val intent2 = Intent(Intent.ACTION_VIEW, Uri.parse(link))
             startActivity(intent2)
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+
+        drawerlayout.closeDrawers()  // 액티비티가 완전히 안보이고 다시 보일 때 드로어 닫음
+    }
+
+    override fun onNavigationItemSelected(item: MenuItem): Boolean {
+        when(item.itemId) {
+            R.id.item1 -> {
+                print("1번 아이템 선택됨")
+            }
+            R.id.item2 -> {
+                print("2번 아이템 선택됨")
+            }
+        }
+
+        drawerlayout.closeDrawers()  // 아이템 선택 시 드로어 닫음
+        return false
+    }
+
+    override fun onBackPressed() {
+        if (drawerlayout.isDrawerOpen(GravityCompat.START))  // 네비드로어가 열려있을 경우 닫음
+            drawerlayout.closeDrawers()
+        else
+            super.onBackPressed()
     }
 
     // 생명주기 콜백 정의 -----------------------------------------------------------------------------
@@ -76,8 +110,7 @@ class MainActivity : AppCompatActivity() {
         })
 
         // NFC로 텍스트 전송 시  (US-ASCII, UTF-8, UTF-16, ...)
-//        val makeMessage: NdefMessage = NdefMessage(NdefRecord.createTextRecord("UTF-16", "테스트입니다~!!")
-//        )
+//        val makeMessage: NdefMessage = NdefMessage(NdefRecord.createTextRecord("UTF-16", "테스트입니다~!!"))
 
         Log.e(TAG, "onNewIntent: makeMessage: $makeMessage")
 
