@@ -19,6 +19,7 @@ import androidx.core.view.GravityCompat
 import com.google.android.material.navigation.NavigationView
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.android.synthetic.main.activity_main_drawerlayout.*
+import java.nio.charset.Charset
 import java.util.*
 
 class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelectedListener {
@@ -36,7 +37,12 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         naviView.setNavigationItemSelectedListener(this)  // 드로어 리스너 세팅
 
         // 단말기의 NFC 사용이 불가능 할 때 null을 반환함
-        adapter = NfcAdapter.getDefaultAdapter(this)
+        if(NfcAdapter.getDefaultAdapter(this) != null) {
+            adapter = NfcAdapter.getDefaultAdapter(this)
+        } else {
+            Toast.makeText(this, "이 기기에 NFC 기능이 없어 앱을 종료합니다.", Toast.LENGTH_SHORT).show()
+            finish()
+        }
 
         // 현재 액티비티에서 처리하는 방법
         val intent = Intent(this, javaClass).apply {
@@ -103,16 +109,35 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
 
         // 페이로드를 포함하고 태그의 기술을 열거할 수 있는 Tag 객체를 인텐트에서 가져옴
         val tagFromIntent : Tag? = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG)
-        val writeValue = "http://steganowork.ipdisk.co.kr/apps/xe/"
-        // NFC로 메시지 전송 시
-        val makeMessage: NdefMessage = NdefMessage(Uri.parse(writeValue).let { uri ->
-            NdefRecord.createUri(uri)
-        })
+
+        // 참고 사이트 : https://developer.android.com/guide/topics/connectivity/nfc/nfc?hl=ko
+
+        val dataValue = "http://steganowork.ipdisk.co.kr"
+//        val dataValue = editUserInputData.text.toString()
+        // NFC로 URI 전송 시
+//        val rtdUriRecord1 = NdefRecord.createUri("http://example.com")  // 방법 1
+//
+//        val rtdUriRecord2 = Uri.parse("http://example.com").let { uri ->  // 방법 2
+//            NdefRecord.createUri(uri)
+//        }
+//
+        val uriField = dataValue.toByteArray(Charset.forName(""))  // 방법 3
+        val payload = ByteArray(uriField.size + 1)                   //add 1 for the URI Prefix
+        payload [0] = 0x01                                           //prefixes http://www. to the URI
+        System.arraycopy(uriField, 0, payload, 1, uriField.size)     //appends URI to payload
+        val rtdUriRecord = NdefRecord(NdefRecord.TNF_WELL_KNOWN, NdefRecord.RTD_URI, ByteArray(0), payload)
+
+        val makeMessage: NdefMessage = NdefMessage(rtdUriRecord)
+
+//        val makeMessage: NdefMessage = NdefMessage(uriValue.let { uri ->
+//            NdefRecord.createUri(uri)
+//        })
 
         // NFC로 텍스트 전송 시  (US-ASCII, UTF-8, UTF-16, ...)
 //        val makeMessage: NdefMessage = NdefMessage(NdefRecord.createTextRecord("UTF-16", "테스트입니다~!!"))
 
         Log.e(TAG, "onNewIntent: makeMessage: $makeMessage")
+        Log.e(TAG, "onNewIntent: makeMessage.records: ${makeMessage.records}")
 
         if(tagFromIntent != null) {
             if(toggleButton.isChecked) {  // 토글 버튼 ON 시 NFC 태그로 전송함
@@ -129,6 +154,7 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         if (intent.action == NfcAdapter.ACTION_NDEF_DISCOVERED){
             val messages = intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES)
             if(messages == null){
+                Toast.makeText(applicationContext, "messages가 없습니다.", Toast.LENGTH_SHORT).show()
                 return
             }
 
@@ -139,15 +165,13 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
                 for (recsIndex in recs.indices) {
                     val record = recs[recsIndex]
                     if (Arrays.equals(record.type, NdefRecord.RTD_URI)) {
+                        Log.e(TAG, "readTag: record.toUri(): ${record.toUri()}")
                         val intent2 = Intent(Intent.ACTION_VIEW, record.toUri())
-                        Log.e(TAG, "readTag: record.toUri(): $record.toUri()")
                         startActivity(intent2)
                     }
                 }
             }
         }
-
-        // URI 링크 이상한데 수정해야함
 
         val ndef = Ndef.get(tag)
         if (ndef != null) {
@@ -159,7 +183,7 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
             for (i in data.records) {
                 Log.e(TAG, "onNewIntent: NFC 태그에 저장된 값 id : ${String(i.id)}")
                 Log.e(TAG, "onNewIntent: NFC 태그에 저장된 값 tnf : ${i.tnf}")
-                Log.e(TAG, "onNewIntent: NFC 태그에 저장된 값 type : ${i.type}")
+                Log.e(TAG, "onNewIntent: NFC 태그에 저장된 값 type : ${String(i.type)}")
                 Log.e(TAG, "onNewIntent: NFC 태그에 저장된 값 payload : ${String(i.payload)}")
                 readDataText.text = String(i.payload)
             }
