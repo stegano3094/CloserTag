@@ -26,7 +26,7 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
     val TAG: String = "MainActivity"
 
     // NFC의 필수 변수 선언
-    private lateinit var adapter: NfcAdapter  // 안드로이드 단말기의 NFC 정보를 가져오는 변수
+    private var adapter: NfcAdapter? = null  // 안드로이드 단말기의 NFC 정보를 가져오는 변수
     private lateinit var pendingIntent: PendingIntent  // NFC로 전송받은 데이터를 Intent를 통해 다른 액티비티로 넘겨주는 역할
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,13 +51,6 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
 
         // 태그의 세부 정보를 채움 (해당 액티비티에 intent 정보를 넣는다)
         pendingIntent = PendingIntent.getActivity(this, 0, intent, 0)
-
-        readDataText.setOnClickListener {
-            val link = "" + readDataText.text
-            Log.e(TAG, "onCreate: link: $link")
-            val intent2 = Intent(Intent.ACTION_VIEW, Uri.parse(link))
-            startActivity(intent2)
-        }
     }
 
     override fun onStart() {
@@ -93,14 +86,14 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         super.onResume()
         // enableForegroundDispatch()는 기본 스레드에서 호출해야 하며, 활동이 포그라운드에 있을 경우에만 호출해야 합니다.
         // (this, pendingIntent, null, null)로 선언 시 필터링 없이 모든 데이터를 읽고 전송한다.
-        adapter.enableForegroundDispatch(this, pendingIntent, null, null)
+        adapter?.enableForegroundDispatch(this, pendingIntent, null, null)
     }
 
     // 포커스를 잃음
     override fun onPause() {
         super.onPause()
         // 화면에 보이지 않을 경우 데이터 수신을 종료한다.
-        adapter.disableForegroundDispatch(this)  // 수신
+        adapter?.disableForegroundDispatch(this)  // 수신
     }
 
     // 검사된 NFC 태그에서 데이터 처리 시 콜백 구현
@@ -112,23 +105,37 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
 
         // 참고 사이트 : https://developer.android.com/guide/topics/connectivity/nfc/nfc?hl=ko
 
-        val dataValue = "http://steganowork.ipdisk.co.kr"
-//        val dataValue = editUserInputData.text.toString()
+        if(tagFromIntent != null) {
+            if(toggleButton.isChecked) {  // 토글 버튼 ON 시 NFC 태그로 전송함
+                writeTag(makeMessage(), tagFromIntent)
+            } else {
+                readUriTag(tagFromIntent)
+            }
+        } else {
+            Toast.makeText(applicationContext, "태그를 인식하지 못했습니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun makeMessage() : NdefMessage {
         // NFC로 URI 전송 시
+        var dataValue = editUserInputData.text.toString()
+
+        // http:// 미입력 시 넣어주는 코드 (NFC 태그를 읽을 때 http://가 없으면 에러 발생하므로 입력할 때 넣어줌)
+        if(!dataValue.contains("http://")) {
+            dataValue = "http://$dataValue"
+        }
+
+        val uriField = dataValue.toByteArray(Charset.forName("UTF-8"))  // 방법 3
+        val payload = ByteArray(uriField.size + 1)  // add 1 for the URI Prefix
+        payload [0] = 0x01  // prefixes http://www. to the URI
+        System.arraycopy(uriField, 0, payload, 1, uriField.size)  // appends URI to payload
+        val rtdUriRecord = NdefRecord(NdefRecord.TNF_WELL_KNOWN, NdefRecord.RTD_URI, ByteArray(0), payload)
+
 //        val rtdUriRecord1 = NdefRecord.createUri("http://example.com")  // 방법 1
 //
 //        val rtdUriRecord2 = Uri.parse("http://example.com").let { uri ->  // 방법 2
 //            NdefRecord.createUri(uri)
 //        }
-//
-        val uriField = dataValue.toByteArray(Charset.forName(""))  // 방법 3
-        val payload = ByteArray(uriField.size + 1)                   //add 1 for the URI Prefix
-        payload [0] = 0x01                                           //prefixes http://www. to the URI
-        System.arraycopy(uriField, 0, payload, 1, uriField.size)     //appends URI to payload
-        val rtdUriRecord = NdefRecord(NdefRecord.TNF_WELL_KNOWN, NdefRecord.RTD_URI, ByteArray(0), payload)
-
-        val makeMessage: NdefMessage = NdefMessage(rtdUriRecord)
-
 //        val makeMessage: NdefMessage = NdefMessage(uriValue.let { uri ->
 //            NdefRecord.createUri(uri)
 //        })
@@ -136,56 +143,30 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
         // NFC로 텍스트 전송 시  (US-ASCII, UTF-8, UTF-16, ...)
 //        val makeMessage: NdefMessage = NdefMessage(NdefRecord.createTextRecord("UTF-16", "테스트입니다~!!"))
 
-        Log.e(TAG, "onNewIntent: makeMessage: $makeMessage")
-        Log.e(TAG, "onNewIntent: makeMessage.records: ${makeMessage.records}")
+        val makeMessage: NdefMessage = NdefMessage(rtdUriRecord)
+        Log.e(TAG, "makeMessage: $makeMessage")
 
-        if(tagFromIntent != null) {
-            if(toggleButton.isChecked) {  // 토글 버튼 ON 시 NFC 태그로 전송함
-                writeTag(makeMessage, tagFromIntent)
-            } else {
-                readTag(tagFromIntent)
-            }
-        } else {
-            Toast.makeText(applicationContext, "태그를 인식하지 못했습니다.", Toast.LENGTH_SHORT).show()
-        }
+        return makeMessage
     }
 
-    private fun readTag(tag: Tag) {
-        if (intent.action == NfcAdapter.ACTION_NDEF_DISCOVERED){
-            val messages = intent.getParcelableArrayExtra(NfcAdapter.EXTRA_NDEF_MESSAGES)
-            if(messages == null){
-                Toast.makeText(applicationContext, "messages가 없습니다.", Toast.LENGTH_SHORT).show()
-                return
-            }
-
-            for (msgIndex in messages.indices){
-                val msg: NdefMessage = messages[msgIndex] as NdefMessage
-                val recs = msg.records
-
-                for (recsIndex in recs.indices) {
-                    val record = recs[recsIndex]
-                    if (Arrays.equals(record.type, NdefRecord.RTD_URI)) {
-                        Log.e(TAG, "readTag: record.toUri(): ${record.toUri()}")
-                        val intent2 = Intent(Intent.ACTION_VIEW, record.toUri())
-                        startActivity(intent2)
-                    }
-                }
-            }
-        }
-
+    private fun readUriTag(tag: Tag) {
         val ndef = Ndef.get(tag)
         if (ndef != null) {
             ndef.connect()
             val data = ndef.cachedNdefMessage
             Toast.makeText(applicationContext, "NFC 태그에 저장된 값 : $data", Toast.LENGTH_SHORT).show()
-            Log.e(TAG, "onNewIntent: NFC 태그에 저장된 값 : $data")
+
+            Log.e(TAG, "readUriTag()")
+            recsLog(data.records)
 
             for (i in data.records) {
-                Log.e(TAG, "onNewIntent: NFC 태그에 저장된 값 id : ${String(i.id)}")
-                Log.e(TAG, "onNewIntent: NFC 태그에 저장된 값 tnf : ${i.tnf}")
-                Log.e(TAG, "onNewIntent: NFC 태그에 저장된 값 type : ${String(i.type)}")
-                Log.e(TAG, "onNewIntent: NFC 태그에 저장된 값 payload : ${String(i.payload)}")
                 readDataText.text = String(i.payload)
+
+                // payload [0] = 0x01 데이터로 인해 제대로 읽지 못해서 이 데이터를 지우는 작업을 하고 인터넷으로 이동한다.
+                val resultUriData = String(i.payload).subSequence(1, i.payload.size)
+                Log.e(TAG, "readUriTag: resultUriData: ${resultUriData}")
+                val intent2 = Intent(Intent.ACTION_VIEW, Uri.parse(resultUriData.toString()))
+                startActivity(intent2)
             }
         }
     }
@@ -207,9 +188,22 @@ class MainActivity : AppCompatActivity(), NavigationView.OnNavigationItemSelecte
                 }
                 ndef.writeNdefMessage(message)
                 Toast.makeText(applicationContext, "NFC 태그에 저장하였습니다.", Toast.LENGTH_SHORT).show()
+
+                Log.e(TAG, "writeTag()")
+                recsLog(message.records)
             }
         } catch (e: Exception) {
+            Toast.makeText(applicationContext, "다시 시도해주세요.", Toast.LENGTH_SHORT).show()
             Log.e(TAG, e.printStackTrace().toString())
+        }
+    }
+
+    private fun recsLog(data: Array<NdefRecord>) {
+        for (i in data) {
+            Log.e(TAG, "recsLog: NFC 태그 id : ${String(i.id)}")
+            Log.e(TAG, "recsLog: NFC 태그 tnf : ${i.tnf}")
+            Log.e(TAG, "recsLog: NFC 태그 type : ${String(i.type)}")
+            Log.e(TAG, "recsLog: NFC 태그 payload : ${String(i.payload)}")
         }
     }
 }
